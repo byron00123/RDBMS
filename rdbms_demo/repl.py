@@ -32,7 +32,6 @@ def execute(command):
             else:
                 db.create_table(table_name, cols, primary_key, unique_keys)
                 print(f"Table '{table_name}' created successfully")
-
         except Exception as e:
             print("Error:", e)
 
@@ -57,59 +56,67 @@ def execute(command):
 
             db.insert_into(table_name, values)
             print("Row inserted successfully")
-
         except Exception as e:
             print("Error:", e)
 
-    # SELECT * FROM (with optional WHERE or INNER JOIN)
+    # SELECT * FROM (with optional INNER/LEFT JOIN)
     elif cmd_lower.startswith("select * from"):
         try:
-            # Check for JOIN
+            command_clean = command.strip().rstrip(";")
             if "join" in cmd_lower:
-                # Parse INNER JOIN syntax
-                # Example: SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id;
-                tokens = command.split()
-                table1 = tokens[3].strip()
-                table2 = tokens[tokens.index("JOIN")+1].strip()
-                on_index = tokens.index("ON")
-                join_condition = " ".join(tokens[on_index+1:]).strip(";")
-                if "=" not in join_condition:
-                    raise ValueError("Only equality joins supported")
-                left, right = [x.strip() for x in join_condition.split("=")]
-                left_table, left_col = left.split(".")
-                right_table, right_col = right.split(".")
-                
+                # Detect JOIN type
+                join_type = "inner"
+                if "left join" in cmd_lower:
+                    join_type = "left"
+                    join_pos = cmd_lower.find("left join")
+                    join_keyword_len = len("left join")
+                else:
+                    join_pos = cmd_lower.find(" join")
+                    join_keyword_len = len("join")
+
+                tokens = command_clean.split()
+                table1 = tokens[3]
+                table2 = tokens[join_pos + join_keyword_len:].strip().split()[0]
+
+                # Parse ON clause
+                on_index = [i for i, t in enumerate(tokens) if t.upper() == "ON"][0]
+                left_col = tokens[on_index + 1]
+                right_col = tokens[on_index + 3]
+
+                left_table, left_col = left_col.split(".")
+                right_table, right_col = right_col.split(".")
+
                 rows1 = db.select_all_from(table1)
                 rows2 = db.select_all_from(table2)
 
                 joined_rows = []
                 for r1 in rows1:
+                    matched = False
                     for r2 in rows2:
                         if str(r1[left_col]) == str(r2[right_col]):
                             combined = {}
-                            # prefix columns with table names to avoid conflicts
                             combined.update({f"{table1}.{k}": v for k, v in r1.items()})
                             combined.update({f"{table2}.{k}": v for k, v in r2.items()})
                             joined_rows.append(combined)
+                            matched = True
+                    if join_type == "left" and not matched:
+                        combined = {}
+                        combined.update({f"{table1}.{k}": v for k, v in r1.items()})
+                        combined.update({f"{table2}.{k}": None for k in db.tables[table2].columns.keys()})
+                        joined_rows.append(combined)
 
                 for row in joined_rows:
                     print(row)
 
             else:
                 # SELECT without JOIN
-                parts = command.lower().split("where")
-                table_name = parts[0].split()[3].strip(";")
+                parts = command_clean.lower().split("where")
+                table_name = parts[0].split()[3]
                 rows = db.select_all_from(table_name)
-
                 if len(parts) > 1:
-                    condition = parts[1].strip().strip(";")
-                    if "=" not in condition:
-                        raise ValueError("Only equality conditions supported")
-                    col, val = condition.split("=")
-                    col = col.strip()
-                    val = val.strip().strip("'").strip('"')
+                    condition = parts[1].strip()
+                    col, val = [x.strip().strip("'").strip('"') for x in condition.split("=")]
                     rows = [row for row in rows if str(row.get(col)) == val]
-
                 for row in rows:
                     print(row)
 
@@ -136,11 +143,7 @@ def execute(command):
 
             rows = db.select_all_from(table_name)
             if where_part:
-                if "=" not in where_part:
-                    raise ValueError("Only equality WHERE supported")
-                w_col, w_val = where_part.split("=")
-                w_col = w_col.strip()
-                w_val = w_val.strip().strip("'").strip('"')
+                w_col, w_val = [x.strip().strip("'").strip('"') for x in where_part.split("=")]
                 rows = [row for row in rows if str(row.get(w_col)) == w_val]
 
             for row in rows:
@@ -148,7 +151,6 @@ def execute(command):
                     row[k] = v
 
             print(f"{len(rows)} row(s) updated")
-
         except Exception as e:
             print("Error:", e)
 
@@ -158,23 +160,17 @@ def execute(command):
             table_name = command.split()[2].strip()
             where_index = cmd_lower.find("where")
             rows = db.select_all_from(table_name)
-
             if where_index == -1:
                 to_delete = rows[:]
             else:
                 where_part = command[where_index + 5:].strip().strip(";")
-                if "=" not in where_part:
-                    raise ValueError("Only equality WHERE supported")
-                col, val = where_part.split("=")
-                col = col.strip()
-                val = val.strip().strip("'").strip('"')
+                col, val = [x.strip().strip("'").strip('"') for x in where_part.split("=")]
                 to_delete = [row for row in rows if str(row.get(col)) == val]
 
             for row in to_delete:
                 rows.remove(row)
 
             print(f"{len(to_delete)} row(s) deleted")
-
         except Exception as e:
             print("Error:", e)
 
@@ -195,7 +191,6 @@ def start_repl():
         if line.lower() in ["exit", "quit"]:
             print("Exiting REPL...")
             break
-
         buffer += " " + line.strip()
         if ";" in buffer:
             commands = buffer.split(";")
