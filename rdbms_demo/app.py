@@ -1,60 +1,134 @@
-# app.py
 from flask import Flask, render_template_string, request, redirect
 from repl import db  # use the same Database instance from repl.py
 
 app = Flask(__name__)
 
-# Simple HTML templates as strings for demonstration
+# Styled HTML templates
 INDEX_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mini-RDBMS Web App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
+    }
+    h1, h2, h3 {
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      background: #fff;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background-color: #4CAF50;
+      color: white;
+    }
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    form {
+      margin-bottom: 30px;
+      padding: 10px;
+      background: #fff;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      width: fit-content;
+    }
+    input {
+      padding: 5px;
+      margin: 5px;
+    }
+    button {
+      padding: 5px 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    a {
+      text-decoration: none;
+      color: #2196F3;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px;
+    }
+    .section {
+      flex: 1 1 400px;
+    }
+  </style>
+</head>
+<body>
 <h1>Mini-RDBMS Web App</h1>
 
-<h2>Users</h2>
-<table border="1">
-<tr><th>ID</th><th>Name</th><th>Email</th><th>Actions</th></tr>
-{% for user in users %}
-<tr>
-  <td>{{ user['id'] }}</td>
-  <td>{{ user['name'] }}</td>
-  <td>{{ user['email'] }}</td>
-  <td>
-    <a href="/edit_user/{{ user['id'] }}">Edit</a> |
-    <a href="/delete_user/{{ user['id'] }}">Delete</a>
-  </td>
-</tr>
-{% endfor %}
-</table>
+<div class="container">
+  <div class="section">
+    <h2>Users</h2>
+    <table>
+      <tr><th>ID</th><th>Name</th><th>Email</th><th>Actions</th></tr>
+      {% for user in users %}
+      <tr>
+        <td>{{ user['id'] }}</td>
+        <td>{{ user['name'] }}</td>
+        <td>{{ user['email'] }}</td>
+        <td>
+          <a href="/edit_user/{{ user['id'] }}">Edit</a> |
+          <a href="/delete_user/{{ user['id'] }}">Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <h3>Add User</h3>
+    <form method="POST" action="/add_user">
+      Name: <input name="name" required>
+      Email: <input name="email" required>
+      <button type="submit">Add</button>
+    </form>
+  </div>
 
-<h3>Add User</h3>
-<form method="POST" action="/add_user">
-  Name: <input name="name" required>
-  Email: <input name="email" required>
-  <button type="submit">Add</button>
-</form>
-
-<h2>Orders</h2>
-<table border="1">
-<tr><th>ID</th><th>User ID</th><th>Item</th><th>Actions</th></tr>
-{% for order in orders %}
-<tr>
-  <td>{{ order['id'] }}</td>
-  <td>{{ order['user_id'] }}</td>
-  <td>{{ order['item'] }}</td>
-  <td>
-    <a href="/delete_order/{{ order['id'] }}">Delete</a>
-  </td>
-</tr>
-{% endfor %}
-</table>
-
-<h3>Add Order</h3>
-<form method="POST" action="/add_order">
-  User ID: <input name="user_id" required>
-  Item: <input name="item" required>
-  <button type="submit">Add</button>
-</form>
+  <div class="section">
+    <h2>Orders</h2>
+    <table>
+      <tr><th>ID</th><th>User ID</th><th>Item</th><th>Actions</th></tr>
+      {% for order in orders %}
+      <tr>
+        <td>{{ order['id'] }}</td>
+        <td>{{ order['user_id'] }}</td>
+        <td>{{ order['item'] }}</td>
+        <td>
+          <a href="/delete_order/{{ order['id'] }}">Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <h3>Add Order</h3>
+    <form method="POST" action="/add_order">
+      User ID: <input name="user_id" required>
+      Item: <input name="item" required>
+      <button type="submit">Add</button>
+    </form>
+  </div>
+</div>
 
 <h2>Users + Orders (INNER JOIN)</h2>
-<table border="1">
+<table>
 <tr><th>User ID</th><th>Name</th><th>Email</th><th>Order ID</th><th>Item</th></tr>
 {% for row in join_rows %}
 <tr>
@@ -66,9 +140,24 @@ INDEX_HTML = """
 </tr>
 {% endfor %}
 </table>
+</body>
+</html>
 """
 
 EDIT_USER_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Edit User</title>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    form { background: #f9f9f9; padding: 10px; width: fit-content; }
+    input { padding: 5px; margin: 5px; }
+    button { padding: 5px 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+  </style>
+</head>
+<body>
 <h1>Edit User</h1>
 <form method="POST" action="/edit_user/{{ user['id'] }}">
   Name: <input name="name" value="{{ user['name'] }}" required>
@@ -76,6 +165,8 @@ EDIT_USER_HTML = """
   <button type="submit">Save</button>
 </form>
 <a href="/">Back</a>
+</body>
+</html>
 """
 
 # Ensure tables exist
