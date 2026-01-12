@@ -61,24 +61,57 @@ def execute(command):
         except Exception as e:
             print("Error:", e)
 
-    # SELECT * FROM
+    # SELECT * FROM (with optional WHERE or INNER JOIN)
     elif cmd_lower.startswith("select * from"):
         try:
-            parts = command.lower().split("where")
-            table_name = parts[0].split()[3].strip(";")
-            rows = db.select_all_from(table_name)
+            # Check for JOIN
+            if "join" in cmd_lower:
+                # Parse INNER JOIN syntax
+                # Example: SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id;
+                tokens = command.split()
+                table1 = tokens[3].strip()
+                table2 = tokens[tokens.index("JOIN")+1].strip()
+                on_index = tokens.index("ON")
+                join_condition = " ".join(tokens[on_index+1:]).strip(";")
+                if "=" not in join_condition:
+                    raise ValueError("Only equality joins supported")
+                left, right = [x.strip() for x in join_condition.split("=")]
+                left_table, left_col = left.split(".")
+                right_table, right_col = right.split(".")
+                
+                rows1 = db.select_all_from(table1)
+                rows2 = db.select_all_from(table2)
 
-            if len(parts) > 1:
-                condition = parts[1].strip().strip(";")
-                if "=" not in condition:
-                    raise ValueError("Only equality conditions supported")
-                col, val = condition.split("=")
-                col = col.strip()
-                val = val.strip().strip("'").strip('"')
-                rows = [row for row in rows if str(row.get(col)) == val]
+                joined_rows = []
+                for r1 in rows1:
+                    for r2 in rows2:
+                        if str(r1[left_col]) == str(r2[right_col]):
+                            combined = {}
+                            # prefix columns with table names to avoid conflicts
+                            combined.update({f"{table1}.{k}": v for k, v in r1.items()})
+                            combined.update({f"{table2}.{k}": v for k, v in r2.items()})
+                            joined_rows.append(combined)
 
-            for row in rows:
-                print(row)
+                for row in joined_rows:
+                    print(row)
+
+            else:
+                # SELECT without JOIN
+                parts = command.lower().split("where")
+                table_name = parts[0].split()[3].strip(";")
+                rows = db.select_all_from(table_name)
+
+                if len(parts) > 1:
+                    condition = parts[1].strip().strip(";")
+                    if "=" not in condition:
+                        raise ValueError("Only equality conditions supported")
+                    col, val = condition.split("=")
+                    col = col.strip()
+                    val = val.strip().strip("'").strip('"')
+                    rows = [row for row in rows if str(row.get(col)) == val]
+
+                for row in rows:
+                    print(row)
 
         except Exception as e:
             print("Error:", e)
@@ -86,11 +119,8 @@ def execute(command):
     # UPDATE
     elif cmd_lower.startswith("update"):
         try:
-            # Parse table name
             set_index = cmd_lower.find("set")
             table_name = command[6:set_index].strip()
-
-            # Parse SET and optional WHERE
             where_index = cmd_lower.find("where", set_index)
             if where_index == -1:
                 set_part = command[set_index + 3:].strip().strip(";")
@@ -99,7 +129,6 @@ def execute(command):
                 set_part = command[set_index + 3:where_index].strip()
                 where_part = command[where_index + 5:].strip().strip(";")
 
-            # Parse updates
             updates = {}
             for assignment in set_part.split(","):
                 k, v = assignment.split("=")
